@@ -1,0 +1,28 @@
+ Malicious File Upload (악성 파일 업로드)
+
+alert http any any -> any any (msg:"Web Attack: PHP code detected in file upload"; file.data; pcre:"/<\?php\s+/i"; classtype:web-application-attack; sid:1001016; rev:1;)
+
+ file.data; pcre:"/<\?php\s+/i";
+- `<?php`  (스페이스 1개) -> **탐지 O**
+- `<?php\t` (탭 1개) -> **탐지 O**
+- `<?php`  (스페이스 2개) -> **탐지 O**
+/i 대소문자 구분하지않음
+
+
+alert http any any -> any any (msg:"Web Attack: Short PHP open tag detected in file upload"; file.data; content:"<?"; classtype:web-application-attack; sid:5000003; rev:1;)
+
+file.data; content:"<?"; 
+ PHP 태그의 시작인 ‘<? ‘탐지
+
+
+alert http any any -> any any (msg:"Web Attack: Webshell function (system|passthru) detected in file upload"; file.data; pcre:"/(system|passthru|shell_exec|exec)\s*\(/i"; classtype:web-application-attack; sid:5000005; rev:1;)
+
+함수 (`system`, `passthru` 등) 사용 되는지 탐지
+
+
+alert http any any -> any any (msg:"Web Attack: PHP code detected in file upload"; file.data; pcre:"/<\?php\s+/i"; classtype:web-application-attack; sid:1001016; rev:1;)
+
+alert http any any -> any any (msg:"Web Attack: Short PHP open tag detected in file upload"; file.data; content:"<?"; classtype:web-application-attack; sid:5000003; rev:1;)
+
+alert http any any -> any any (msg:"Web Attack: Webshell function (system|passthru) detected in file upload"; file.data; pcre:"/(system|passthru|shell_exec|exec)\s*\(/i"; classtype:web-application-attack; sid:5000005; rev:1;)
+

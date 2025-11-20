@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>룰셋 제출</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+  
+  <style>
+    /* 제출 결과 피드백을 보기 쉽게 스타일링 */
+    #result {
+      font-size: 1.1em; /* 기본 글자 크기 키우기 */
+      line-height: 1.6;
+    }
+    #result b { 
+      /* "제출 결과:", "점수" 같은 제목 스타일 */
+      font-size: 1.3em; /* 제목 글자 크기 */
+      color: #00c3ff; /* 눈에 띄는 파란색 */
+      display: block; /* 줄바꿈 */
+      margin-top: 15px; /* 위쪽 여백 */
+      margin-bottom: 5px; /* 아래쪽 여백 */
+    }
+    #result b:first-child { 
+      margin-top: 0; /* 첫 번째 제목은 위쪽 여백 없음 */
+    }
+    /* "fail"을 "Fail"로 (대문자) */
+    #result .status-text {
+      text-transform: capitalize;
+    }
+    /* [신규] "채점 중" 스타일 */
+    #result.status-info {
+      color: #00e0c6; /* 민트색 */
+      font-weight: bold;
+    }
+  </style>
+  </head>
+<body>
+<div class="container" style="max-width: 1200px;">
+  <h1>룰셋 제출</h1>
+  <p class="dim">라운드 진행 중에만 제출이 1회 인정됩니다.</p>
+
+  <label>Suricata 룰</label>
+  <textarea id="suri" rows="10" placeholder='예) alert http any any -> any any (msg:"SQLi"; http.request_body; content:"--"; sid:100001; rev:1;)' ></textarea>
+
+  <label>Modsecurity 룰</label>
+  <textarea id="waf" rows="10" placeholder='예) SecRule ARGS "(?i)(union\s+select|or\s+1=1)" "id:200001,phase:2,deny,log"' ></textarea>
+
+  <div style="margin-top:12px;">
+    <button id="send" class="btn btn-primary">제출</button>
+    <a class="btn btn-ghost" href="/">돌아가기</a>
+  </div>
+
+  <div id="result" class="card" style="margin-top:16px; display:none;"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<script>
+const socket = io();
+const sendBtn = document.getElementById('send');
+const box = document.getElementById('result');
+
+sendBtn.onclick = () => {
+  const suri = document.getElementById('suri').value.trim();
+  const waf  = document.getElementById('waf').value.trim();
+  
+  // 버튼 비활성화 (중복 제출 방지)
+  sendBtn.disabled = true;
+  sendBtn.textContent = "제출 중...";
+  
+  // "채점 중" 메시지를 즉시 표시
+  box.style.display = 'block';
+  box.className = 'card status-info'; // 'status-info' 클래스 추가
+  box.innerHTML = 'AI가 채점 중입니다... (최대 10초 소요)';
+  
+  socket.emit('submit_answer', { suricata_rule: suri, waf_rule: waf });
+};
+
+socket.on('submit_response', (rsp) => {
+  // 응답을 받으면 버튼 다시 활성화 (단, 에러가 아닐 경우엔 비활성화 유지)
+  if (rsp.status === 'error' || rsp.status === 'info') {
+      sendBtn.disabled = false;
+      sendBtn.textContent = "제출";
+  }
+
+  if (!rsp || !rsp.status) {
+    box.style.display = 'block';
+    box.className = 'card';
+    box.innerText = '서버 응답 오류';
+    return;
+  }
+  
+  // [신규] "채점 중" info 상태 처리
+  if (rsp.status === 'info') {
+    box.style.display = 'block';
+    box.className = 'card status-info';
+    box.innerText = rsp.message || 'AI가 채점 중입니다...';
+    return;
+  }
+  
+  if (rsp.status === 'error') {
+    box.style.display = 'block';
+    box.className = 'card';
+    box.innerText = rsp.message || '제출 오류';
+    return;
+  }
+
+  // 성공 또는 실패 시 (채점 완료)
+  const d = rsp.detail || {};
+  
+  // "fail" -> "Fail" (대문자)
+  const statusText = rsp.status.charAt(0).toUpperCase() + rsp.status.slice(1);
+  // "총 -5점" -> "(총 -5점)"
+  const messageText = `(${rsp.message})`;
+
+  box.style.display = 'block';
+  box.className = 'card'; // 'status-info' 클래스 제거
+  
+  // AI 채점 이유 부분 제거됨 (d.reason 변수 사용하지 않음)
+
+  box.innerHTML = `
+  <b>제출 결과: <span class="status-text">${statusText}</span></b> ${messageText}<br><br>
+  <b>점수</b>
+  <p style="margin:0; padding-left: 5px;">
+    · Suricata: ${d.suricata_score ?? 0}점<br>
+    · Modsecurity: ${d.waf_score ?? 0}점<br>
+    · 총계: ${d.total_score ?? 0}점
+  </p>
+  `;
+});
+</script>
+</body>
+</html>
